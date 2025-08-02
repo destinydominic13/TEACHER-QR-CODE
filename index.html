@@ -196,15 +196,25 @@
                     </button>
                 </div>
             </div>
-            
+                    
             <!-- Recent Scans -->
             <div class="bg-white rounded-xl shadow-lg p-6 hidden" id="recent-scans">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-history mr-2 text-purple-600"></i> Recent Verifications
-                </h2>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                        <i class="fas fa-history mr-2 text-purple-600"></i> Recent Verifications
+                    </h2>
+                    <button id="clear-storage" class="bg-red-100 hover:bg-red-200 text-red-700 font-medium py-1 px-4 rounded-lg flex items-center text-sm">
+                        <i class="fas fa-trash-alt mr-2"></i> Clear History
+                    </button>
+                </div>
                 
                 <div class="space-y-3" id="scans-list">
                     <!-- Recent scans will be added here -->
+                </div>
+                
+                <div id="no-scans-message" class="text-center py-8 text-gray-500 hidden">
+                    <i class="fas fa-history text-4xl mb-2 opacity-30"></i>
+                    <p>No recent scans found</p>
                 </div>
             </div>
         </div>
@@ -236,6 +246,8 @@
             const recentScans = document.getElementById('recent-scans');
             const clearResultsBtn = document.getElementById('clear-results');
             const confirmPickupBtn = document.getElementById('confirm-pickup');
+            const clearStorageBtn = document.getElementById('clear-storage');
+            const noScansMessage = document.getElementById('no-scans-message');
             
             // Parent info elements
             const parentName = document.getElementById('parent-name');
@@ -249,18 +261,32 @@
             let stream = null;
             let scanning = false;
             let scanInterval;
-            const scanHistory = [];
+            let scanHistory = [];
+            
+            // Load scan history from local storage
+            function loadScanHistory() {
+                const savedHistory = localStorage.getItem('scanHistory');
+                if (savedHistory) {
+                    scanHistory = JSON.parse(savedHistory);
+                }
+                updateHistoryDisplay();
+            }
+            
+            // Save scan history to local storage
+            function saveScanHistory() {
+                localStorage.setItem('scanHistory', JSON.stringify(scanHistory));
+            }
             
             // Start scanner button click handler
             startButton.addEventListener('click', async function() {
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { 
+                        video: {
                             facingMode: "environment",
                             width: { ideal: 1280 },
                             height: { ideal: 720 }
-                        } 
-                    });
+                        }
+                     });
                     
                     video.srcObject = stream;
                     video.play();
@@ -296,6 +322,31 @@
                 recentScans.classList.remove('hidden');
             });
             
+            // Clear storage button click handler
+            clearStorageBtn.addEventListener('click', function() {
+                Swal.fire({
+                    title: 'Clear History?',
+                    text: 'Are you sure you want to delete all scan history? This cannot be undone.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, delete all',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        localStorage.removeItem('scanHistory');
+                        scanHistory = [];
+                        updateHistoryDisplay();
+                        Swal.fire(
+                            'Deleted!',
+                            'All scan history has been cleared.',
+                            'success'
+                        );
+                    }
+                });
+            });
+            
             // Confirm pickup button click handler
             confirmPickupBtn.addEventListener('click', function() {
                 Swal.fire({
@@ -323,13 +374,17 @@
                         scanHistory.unshift({
                             parentName: parentName.textContent,
                             childrenCount: childrenCount.textContent,
-                            timestamp: `${dateString} at ${timeString}`
+                            timestamp: `${dateString} at ${timeString}`,
+                            fullDate: now.toISOString()
                         });
                         
-                        // Keep only last 5 scans
-                        if (scanHistory.length > 5) {
+                        // Keep only last 10 scans
+                        if (scanHistory.length > 10) {
                             scanHistory.pop();
                         }
+                        
+                        // Save to local storage
+                        saveScanHistory();
                         
                         // Update history display
                         updateHistoryDisplay();
@@ -433,7 +488,7 @@
                     // Show the parent info section
                     parentInfo.classList.remove('hidden');
                     recentScans.classList.add('hidden');
-                    
+                
                 } catch (err) {
                     console.error("Error processing QR code:", err);
                     showError("Invalid QR code. Please scan a valid parent authorization QR code.");
@@ -454,15 +509,21 @@
             // Function to update history display
             function updateHistoryDisplay() {
                 if (scanHistory.length === 0) {
-                    recentScans.classList.add('hidden');
+                    scansList.classList.add('hidden');
+                    noScansMessage.classList.remove('hidden');
                     return;
                 }
                 
                 scansList.innerHTML = '';
+                noScansMessage.classList.add('hidden');
+                scansList.classList.remove('hidden');
+                
+                // Sort by date (newest first)
+                scanHistory.sort((a, b) => new Date(b.fullDate) - new Date(a.fullDate));
                 
                 scanHistory.forEach(item => {
                     const scanItem = document.createElement('div');
-                    scanItem.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+                    scanItem.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors';
                     
                     scanItem.innerHTML = `
                         <div class="flex items-center">
@@ -481,8 +542,13 @@
                 });
             }
             
-            // Initialize recent scans if any
-            updateHistoryDisplay();
+            // Initialize recent scans from local storage
+            loadScanHistory();
+            
+            // Show recent scans section if there's history
+            if (scanHistory.length > 0) {
+                recentScans.classList.remove('hidden');
+            }
         });
     </script>
 </body>
