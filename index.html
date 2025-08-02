@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher QR Scanner | School Pickup System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .scanner-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .scanner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4));
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+        
+        .scanner-frame {
+            position: absolute;
+            width: 70%;
+            height: 70%;
+            border: 3px solid #3B82F6;
+            border-radius: 12px;
+            top: 15%;
+            left: 15%;
+            box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5);
+        }
+        
+        .scanner-line {
+            position: absolute;
+            width: 90%;
+            height: 4px;
+            background: #3B82F6;
+            top: 50%;
+            left: 5%;
+            animation: scan 2s infinite linear;
+            border-radius: 4px;
+        }
+        
+        @keyframes scan {
+            0% { top: 15%; }
+            100% { top: 85%; }
+        }
+        
+        .child-card {
+            transition: all 0.3s ease;
+            transform: translateY(20px);
+            opacity: 0;
+        }
+        
+        .child-card.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .success-badge {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="gradient-bg text-white py-6 shadow-lg">
+        <div class="container mx-auto px-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold mb-1">Teacher QR Scanner</h1>
+                    <p class="text-sm md:text-base opacity-90">Student pickup verification system</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="bg-white bg-opacity-20 px-3 py-1 rounded-full text-xs flex items-center">
+                        <i class="fas fa-user-shield mr-1"></i> Teacher Mode
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto">
+            <!-- Scanner Section -->
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-qrcode mr-2 text-purple-600"></i> Parent QR Code Scanner
+                </h2>
+                
+                <div class="scanner-container bg-black">
+                    <video id="scanner-video" width="100%" playsinline></video>
+                    <canvas id="scanner-canvas" style="display: none;"></canvas>
+                    
+                    <div class="scanner-overlay" id="scanner-overlay">
+                        <div class="scanner-frame"></div>
+                        <div class="scanner-line"></div>
+                        <p class="mt-4 text-center px-4">Position the parent's QR code inside the frame</p>
+                    </div>
+                </div>
+                
+                <div class="mt-4 flex justify-center">
+                    <button id="start-scanner" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-lg flex items-center">
+                        <i class="fas fa-play mr-2"></i> Start Scanner
+                    </button>
+                    <button id="stop-scanner" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-6 rounded-lg flex items-center ml-4 hidden">
+                        <i class="fas fa-stop mr-2"></i> Stop Scanner
+                    </button>
+                </div>
+                
+                <div class="mt-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 hidden" id="error-message">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-circle text-yellow-500"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700" id="error-text"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parent and Children Information -->
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8 hidden" id="parent-info">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                        <i class="fas fa-user-circle mr-2 text-purple-600"></i> Parent Information
+                    </h2>
+                    <span id="verification-status" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 success-badge">
+                        <i class="fas fa-check-circle mr-1"></i> Verified
+                    </span>
+                </div>
+                
+                <div class="grid md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h3 class="font-medium text-gray-700 mb-2 flex items-center">
+                            <i class="fas fa-user mr-2 text-purple-500"></i> Parent Details
+                        </h3>
+                        <div class="space-y-2">
+                            <p><span class="font-medium">Name:</span> <span id="parent-name">-</span></p>
+                            <p><span class="font-medium">Phone:</span> <span id="parent-phone">-</span></p>
+                            <p><span class="font-medium">Time:</span> <span id="scan-time">-</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h3 class="font-medium text-gray-700 mb-2 flex items-center">
+                            <i class="fas fa-qrcode mr-2 text-purple-500"></i> QR Information
+                        </h3>
+                        <div class="space-y-2">
+                            <p><span class="font-medium">Code Type:</span> Parent Authorization</p>
+                            <p><span class="font-medium">Children:</span> <span id="children-count">0</span> authorized</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-child mr-2 text-purple-600"></i> Authorized Children
+                    </h3>
+                    
+                    <div class="space-y-4" id="children-list">
+                        <!-- Children cards will be added here -->
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-end">
+                    <button id="clear-results" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-6 rounded-lg flex items-center">
+                        <i class="fas fa-times mr-2"></i> Clear Results
+                    </button>
+                    <button id="confirm-pickup" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-lg flex items-center ml-4">
+                        <i class="fas fa-check-circle mr-2"></i> Confirm Pickup
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Recent Scans -->
+            <div class="bg-white rounded-xl shadow-lg p-6 hidden" id="recent-scans">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <i class="fas fa-history mr-2 text-purple-600"></i> Recent Verifications
+                </h2>
+                
+                <div class="space-y-3" id="scans-list">
+                    <!-- Recent scans will be added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="gradient-bg text-white py-6 mt-8">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-sm">© 2023 School Pickup Verification System. All rights reserved.</p>
+            <div class="flex justify-center space-x-4 mt-3">
+                <a href="#" class="hover:text-gray-200"><i class="fab fa-facebook-f"></i></a>
+                <a href="#" class="hover:text-gray-200"><i class="fab fa-twitter"></i></a>
+                <a href="mailto:support@schoolsystem.edu" class="hover:text-gray-200"><i class="fas fa-envelope"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM Elements
+            const video = document.getElementById('scanner-video');
+            const canvas = document.getElementById('scanner-canvas');
+            const canvasContext = canvas.getContext('2d');
+            const startButton = document.getElementById('start-scanner');
+            const stopButton = document.getElementById('stop-scanner');
+            const scannerOverlay = document.getElementById('scanner-overlay');
+            const errorMessage = document.getElementById('error-message');
+            const errorText = document.getElementById('error-text');
+            const parentInfo = document.getElementById('parent-info');
+            const recentScans = document.getElementById('recent-scans');
+            const clearResultsBtn = document.getElementById('clear-results');
+            const confirmPickupBtn = document.getElementById('confirm-pickup');
+            
+            // Parent info elements
+            const parentName = document.getElementById('parent-name');
+            const parentPhone = document.getElementById('parent-phone');
+            const scanTime = document.getElementById('scan-time');
+            const childrenCount = document.getElementById('children-count');
+            const childrenList = document.getElementById('children-list');
+            const scansList = document.getElementById('scans-list');
+            
+            // Variables
+            let stream = null;
+            let scanning = false;
+            let scanInterval;
+            const scanHistory = [];
+            
+            // Start scanner button click handler
+            startButton.addEventListener('click', async function() {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            facingMode: "environment",
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        } 
+                    });
+                    
+                    video.srcObject = stream;
+                    video.play();
+                    
+                    startButton.classList.add('hidden');
+                    stopButton.classList.remove('hidden');
+                    scannerOverlay.classList.remove('hidden');
+                    errorMessage.classList.add('hidden');
+                    
+                    // Set canvas dimensions to match video
+                    video.addEventListener('canplay', function() {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        
+                        // Start scanning
+                        scanning = true;
+                        scanInterval = setInterval(scanQRCode, 100);
+                    }, false);
+                } catch (err) {
+                    console.error("Error accessing camera:", err);
+                    showError("Could not access the camera. Please ensure you've granted camera permissions.");
+                }
+            });
+            
+            // Stop scanner button click handler
+            stopButton.addEventListener('click', function() {
+                stopScanner();
+            });
+            
+            // Clear results button click handler
+            clearResultsBtn.addEventListener('click', function() {
+                parentInfo.classList.add('hidden');
+                recentScans.classList.remove('hidden');
+            });
+            
+            // Confirm pickup button click handler
+            confirmPickupBtn.addEventListener('click', function() {
+                Swal.fire({
+                    title: 'Confirm Pickup',
+                    text: 'Are you sure you want to confirm this pickup?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#764ba2',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, confirm',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire(
+                            'Pickup Confirmed!',
+                            'The children have been released to the parent.',
+                            'success'
+                        );
+                        
+                        // Add to history
+                        const now = new Date();
+                        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const dateString = now.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                        
+                        scanHistory.unshift({
+                            parentName: parentName.textContent,
+                            childrenCount: childrenCount.textContent,
+                            timestamp: `${dateString} at ${timeString}`
+                        });
+                        
+                        // Keep only last 5 scans
+                        if (scanHistory.length > 5) {
+                            scanHistory.pop();
+                        }
+                        
+                        // Update history display
+                        updateHistoryDisplay();
+                        
+                        // Show recent scans
+                        parentInfo.classList.add('hidden');
+                        recentScans.classList.remove('hidden');
+                    }
+                });
+            });
+            
+            // Function to stop the scanner
+            function stopScanner() {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                clearInterval(scanInterval);
+                scanning = false;
+                
+                startButton.classList.remove('hidden');
+                stopButton.classList.add('hidden');
+            }
+            
+            // Function to scan for QR codes
+            function scanQRCode() {
+                if (!scanning) return;
+                
+                try {
+                    // Draw video frame to canvas
+                    canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Get image data from canvas
+                    const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+                    
+                    // Use jsQR library to decode QR code
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert",
+                    });
+                    
+                    // If QR code found
+                    if (code) {
+                        stopScanner();
+                        processQRCode(code.data);
+                    }
+                } catch (err) {
+                    console.error("Error scanning QR code:", err);
+                }
+            }
+            
+            // Function to process QR code data
+            function processQRCode(qrData) {
+                try {
+                    const data = JSON.parse(qrData);
+                    
+                    // Validate data structure
+                    if (!data.parentName || !data.parentPhone || !data.children || !Array.isArray(data.children)) {
+                        throw new Error("Invalid QR code format");
+                    }
+                    
+                    // Display parent information
+                    parentName.textContent = data.parentName;
+                    parentPhone.textContent = data.parentPhone;
+                    
+                    // Set current time
+                    const now = new Date();
+                    scanTime.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    // Display children
+                    childrenList.innerHTML = '';
+                    data.children.forEach((child, index) => {
+                        const childCard = document.createElement('div');
+                        childCard.className = 'child-card bg-gray-50 p-4 rounded-lg border border-gray-200';
+                        childCard.innerHTML = `
+                            <div class="flex items-center">
+                                <div class="bg-purple-100 p-3 rounded-full mr-4">
+                                    <i class="fas fa-child text-purple-600"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-medium text-gray-800">${child}</h4>
+                                    <p class="text-sm text-gray-600">Student ID: STU${now.getFullYear()}${(index + 1).toString().padStart(3, '0')}</p>
+                                </div>
+                                <div class="ml-auto">
+                                    <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                                        Authorized
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                        childrenList.appendChild(childCard);
+                        
+                        // Add animation
+                        setTimeout(() => {
+                            childCard.classList.add('show');
+                        }, index * 100);
+                    });
+                    
+                    // Update children count
+                    childrenCount.textContent = data.children.length;
+                    
+                    // Show the parent info section
+                    parentInfo.classList.remove('hidden');
+                    recentScans.classList.add('hidden');
+                    
+                } catch (err) {
+                    console.error("Error processing QR code:", err);
+                    showError("Invalid QR code. Please scan a valid parent authorization QR code.");
+                }
+            }
+            
+            // Function to show error message
+            function showError(message) {
+                errorText.textContent = message;
+                errorMessage.classList.remove('hidden');
+                
+                // Hide error after 5 seconds
+                setTimeout(() => {
+                    errorMessage.classList.add('hidden');
+                }, 5000);
+            }
+            
+            // Function to update history display
+            function updateHistoryDisplay() {
+                if (scanHistory.length === 0) {
+                    recentScans.classList.add('hidden');
+                    return;
+                }
+                
+                scansList.innerHTML = '';
+                
+                scanHistory.forEach(item => {
+                    const scanItem = document.createElement('div');
+                    scanItem.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+                    
+                    scanItem.innerHTML = `
+                        <div class="flex items-center">
+                            <div class="bg-purple-100 p-2 rounded-lg mr-3">
+                                <i class="fas fa-user text-purple-600"></i>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-800">${item.parentName}</p>
+                                <p class="text-xs text-gray-500">Picked up ${item.childrenCount} children</p>
+                            </div>
+                        </div>
+                        <span class="text-sm text-gray-500">${item.timestamp}</span>
+                    `;
+                    
+                    scansList.appendChild(scanItem);
+                });
+            }
+            
+            // Initialize recent scans if any
+            updateHistoryDisplay();
+        });
+    </script>
+</body>
+</html>
